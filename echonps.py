@@ -42,17 +42,6 @@ tabs = st.tabs([
 with tabs[0]:
     st.subheader("Tendencias en el Tiempo")
 
-    # Descripción
-    st.markdown("""
-    📊 **Descripción:**  
-    Este análisis muestra la evolución del **Score Promedio** de satisfacción a lo largo del tiempo, 
-    permitiendo identificar tendencias y cambios en la percepción de los clientes.  
-
-    Además, se presenta un gráfico de la evolución de los **Detractores** (clientes con puntajes menores a 7), 
-    lo que ayuda a detectar posibles problemas recurrentes. Ahora, cada punto del gráfico muestra el **ciclo de facturación** 
-    y un **comentario representativo (verbatim)** para contextualizar los picos altos y bajos.
-    """)
-
     df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
     fecha_inicio = pd.to_datetime(fecha_inicio)
     fecha_fin = pd.to_datetime(fecha_fin)
@@ -76,21 +65,21 @@ with tabs[0]:
     col1, col2, col3 = st.columns(3)
     col1.metric("Total Respuestas NPS", total_nps)
     col2.metric("Score Promedio", f"{score_promedio:.2f}")
-    col3.metric("% Detractores", f"{porcentaje_detractores:.2f}%")  # ✅ Ahora basado en NPS
+    col3.metric("% Detractores", f"{porcentaje_detractores:.2f}%")
 
-    # Evolución del Score Promedio
+    # 📈 Score Promedio por día
     df_grouped = df_filtered.groupby("Periodo").agg({"score": "mean", "fecha": "count"}).rename(
         columns={"score": "Score Promedio", "fecha": "Cantidad Encuestas"}
     )
     fig_line = px.line(df_grouped, x=df_grouped.index, y="Score Promedio", title="Evolución del Score Promedio")
     st.plotly_chart(fig_line, use_container_width=True)
 
-    # Evolución de Detractores con Tooltips de Ciclo de Facturación y Verbatim
+    # 📉 Evolución de Detractores
     df_filtered["detractor"] = df_filtered["nps"] < 7
     df_grouped_det = df_filtered[df_filtered["detractor"]].groupby("Periodo").agg(
         Cantidad_Detractores=("detractor", "sum"),
-        Ciclo_Facturacion=("ciclo_fact", "first"),  # Mostrar un ciclo_fact representativo
-        Verbatim=("verbatim", "first")  # Mostrar un verbatim representativo
+        Ciclo_Facturacion=("ciclo_fact", "first"),
+        Verbatim=("verbatim", "first")
     ).reset_index()
 
     fig_det = px.line(
@@ -99,40 +88,39 @@ with tabs[0]:
         y="Cantidad_Detractores",
         title="Evolución de Detractores",
         markers=True,
-        hover_data={"Ciclo_Facturacion": True, "Verbatim": True}  # Agrega info en tooltip
+        hover_data={"Ciclo_Facturacion": True, "Verbatim": True}
     )
-
     fig_det.update_traces(line=dict(color="red"))
     st.plotly_chart(fig_det, use_container_width=True)
 
-    # Explicación de los gráficos
-    st.markdown("""
-        <style>
-        .custom-title {
-            font-family: 'Segoe UI', sans-serif;
-            font-size: 24px;
-            font-weight: bold;
-            color: #2C3E50;
-            text-align: left;
-        }
-        .custom-text {
-            font-family: 'Segoe UI', sans-serif;
-            font-size: 16px;
-            color: #34495E;
-            text-align: justify;
-        }
-        </style>
-        <p class='custom-title'>📊 Explicación de los Gráficos</p>
-        <p class='custom-text'>✅ <b>Score Promedio</b>: Muestra la evolución de la satisfacción de los clientes a lo largo del tiempo.  
-        Un aumento indica <span style='color:green'><b>mejor experiencia</b> ✅</span>, mientras que una disminución puede reflejar <span style='color:red'><b>problemas recurrentes</b> ❌</span>.</p>
-        <p class='custom-text'>🔴 <b>Evolución de Detractores</b>: Indica cuántos clientes han dado una puntuación menor a 7.  
-        Un aumento en la línea roja significa más clientes insatisfechos ⚠️.  
-        Lo ideal es mantener esta línea lo más baja posible 📉.</p>
-        <p class='custom-text'>📌 <b>Ahora los puntos incluyen:</b>  
-        - 🔹 <b>Ciclo de Facturación</b> asociado al momento.  
-        - 💬 <b>Un comentario de cliente</b> (verbatim) representativo de ese día.  
-        </p>
-    """, unsafe_allow_html=True)
+    # 📊 Evolución del volumen de respuestas por grupo NPS
+    if "grupo_nps" in df_filtered.columns:
+        df_volumen = df_filtered.groupby(["Periodo", "grupo_nps"]).size().reset_index(name="Cantidad")
+        fig_vol = px.bar(
+            df_volumen,
+            x="Periodo",
+            y="Cantidad",
+            color="grupo_nps",
+            barmode="stack",
+            title="Volumen de respuestas por Grupo NPS en el tiempo"
+        )
+        st.plotly_chart(fig_vol, use_container_width=True)
+
+    # 📋 Evolución de categorías más mencionadas
+    if "categoria" in df_filtered.columns:
+        df_cat = df_filtered.groupby(["Periodo", "categoria"]).size().reset_index(name="Cantidad")
+        top_categorias = df_cat.groupby("categoria")["Cantidad"].sum().nlargest(5).index
+        df_cat_top = df_cat[df_cat["categoria"].isin(top_categorias)]
+        fig_cat = px.bar(
+            df_cat_top,
+            x="Periodo",
+            y="Cantidad",
+            color="categoria",
+            barmode="group",
+            title="Top 5 Categorías mencionadas por período"
+        )
+        st.plotly_chart(fig_cat, use_container_width=True)
+
 
 
 # 2. Segmentos y Categorías
@@ -189,17 +177,16 @@ with tabs[1]:
 # 3. Distribución de Respuestas NPS
 with tabs[2]:
     st.subheader("Distribución de Respuestas NPS")
-    
+
     # Descripción
     st.markdown("""
     📢 **Descripción:**  
-    Esta sección permite filtrar y analizar las respuestas NPS según **Grupo NPS, Categoría y palabras clave en los verbatims** 
-    (comentarios de los clientes).  
+    Esta sección permite filtrar y analizar las respuestas NPS según **Grupo NPS, Categoría y palabras clave en los verbatims**  
 
     Además, se presenta la **Distribución de Respuestas por Grupo NPS** en formato de tabla y gráfico, 
     facilitando la identificación de tendencias en la satisfacción del cliente.
     """)
-    
+
     required_cols = ["dni", "fecha", "verbatim", "grupo_nps", "categoria"]
     missing_cols = [col for col in required_cols if col not in df.columns]
     if missing_cols:
@@ -210,19 +197,24 @@ with tabs[2]:
             grupo_nps_filter = st.selectbox("Filtrar por Grupo NPS", ["Todos"] + sorted(df["grupo_nps"].dropna().unique().tolist()), key="grupo_nps_filter_nps")
         with col2:
             categoria_filter = st.selectbox("Filtrar por Categoría", ["Todos"] + sorted(df["categoria"].dropna().unique().tolist()), key="categoria_filter_nps")
+
         search_word = st.text_input("Buscar palabra en Verbatim (separadas por comas)", key="verbatim_search")
+
         df_filtered = df.copy()
         if grupo_nps_filter != "Todos":
             df_filtered = df_filtered[df_filtered["grupo_nps"] == grupo_nps_filter]
         if categoria_filter != "Todos":
             df_filtered = df_filtered[df_filtered["categoria"] == categoria_filter]
+
         df_base = df_filtered.copy()
+
         if search_word:
             tokens = [token.strip() for token in search_word.split(",") if token.strip()]
             mask = pd.Series(False, index=df_filtered.index)
             for token in tokens:
                 mask |= df_filtered["verbatim"].str.contains(token, case=False, na=False)
             df_tokens = df_filtered[mask].copy()
+
             total_by_group = df_base.groupby("grupo_nps").size()
             tokens_by_group = df_tokens.groupby("grupo_nps").size()
             df_percentage = pd.DataFrame({"Total": total_by_group, "Con Tokens": tokens_by_group})
@@ -231,25 +223,55 @@ with tabs[2]:
             st.write("### Porcentaje de verbatim que contienen los tokens, por Grupo NPS")
             st.dataframe(df_percentage.reset_index())
             df_filtered = df_tokens.copy()
+
+            # --- Gráfico de tendencia en el tiempo ---
+            import matplotlib.pyplot as plt
+            import matplotlib.dates as mdates
+
+            # Tokenización simple
+            df_filtered["tokens"] = df_filtered["verbatim"].astype(str).apply(lambda x: x.lower().split())
+
+            tendencia_df = pd.DataFrame()
+            token_counts = {}
+            for palabra in tokens:
+                df_filtered[f"contiene_{palabra}"] = df_filtered["tokens"].apply(lambda t: palabra.lower() in t)
+                tendencia = df_filtered.groupby(df_filtered["fecha"].dt.to_period("M"))[f"contiene_{palabra}"].sum()
+                tendencia_df[palabra] = tendencia
+                token_counts[palabra] = df_filtered[f"contiene_{palabra}"].sum()
+
+            tendencia_df.index = tendencia_df.index.to_timestamp()
+
+            st.subheader("📈 Tendencia de palabras clave en el tiempo")
+            fig, ax = plt.subplots(figsize=(10, 5))
+            for palabra in tokens:
+                ax.plot(tendencia_df.index, tendencia_df[palabra], label=palabra, marker='o')
+
+            ax.set_title("Menciones de palabras clave por mes")
+            ax.set_xlabel("Fecha")
+            ax.set_ylabel("Cantidad de menciones")
+            ax.legend()
+            ax.grid(True)
+
+            # Formato del eje X solo día y mes
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m'))
+            fig.autofmt_xdate()
+
+            st.pyplot(fig)
+
+            # --- Tabla resumen de ocurrencias ---
+            st.write("### Cantidad total de menciones por palabra clave en el periodo seleccionado")
+            resumen_tokens = pd.DataFrame.from_dict(token_counts, orient="index", columns=["Cantidad de menciones"])
+            resumen_tokens.index.name = "Palabra"
+            st.dataframe(resumen_tokens.reset_index())
+
         st.write("### Tabla Completa de Respuestas NPS (filtrada)")
         st.dataframe(df_filtered[required_cols])
-        df_nps_pie = df.groupby(["grupo_nps", "categoria"]).size().reset_index(name="count")
-        total_counts = df.groupby("grupo_nps").size().reset_index(name="total")
-        df_nps_pie = pd.merge(df_nps_pie, total_counts, on="grupo_nps", how="left")
-        df_nps_pie["percentage"] = (df_nps_pie["count"] / df_nps_pie["total"]) * 100
-        df_nps_pie_formatted = df_nps_pie[["grupo_nps", "categoria", "total", "percentage"]].copy()
-        df_nps_pie_formatted.rename(columns={"percentage": "Porcentaje"}, inplace=True)
-        df_nps_pie_formatted["Porcentaje"] = df_nps_pie_formatted["Porcentaje"].round(0).astype(int).astype(str) + "%"
-        df_nps_pie_formatted["total"] = df_nps_pie_formatted["total"].astype(int)
-        st.write("### Tabla de Distribución NPS por Categoría")
-        st.dataframe(df_nps_pie_formatted)
-        df_nps_groups = df["grupo_nps"].value_counts(normalize=True).reset_index()
-        df_nps_groups.columns = ["grupo_nps", "percentage"]
-        df_nps_groups["percentage"] *= 100
-        colors = {"Detractor": "red", "Pasivo": "gold", "Promotor": "green"}
-        fig_pie = px.pie(df_nps_groups, values="percentage", names="grupo_nps", title="Distribución General de Respuestas NPS", color="grupo_nps", color_discrete_map=colors, hole=0.3, labels={"percentage": "Porcentaje"})
-        fig_pie.update_traces(textinfo="percent+label", textfont_size=14)
-        st.plotly_chart(fig_pie, use_container_width=True)
+
+
+
+
+        
+
 
 
 # 4. Clasificación de Dolores
