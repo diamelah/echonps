@@ -102,7 +102,12 @@ with tabs[0]:
             y="Cantidad",
             color="grupo_nps",
             barmode="stack",
-            title="Volumen de respuestas por Grupo NPS en el tiempo"
+            title="Volumen de respuestas por Grupo NPS en el tiempo",
+            color_discrete_map={
+                "Detractor": "red",
+                "Pasivo": "skyblue",
+                "Promotor": "blue"
+            }
         )
         st.plotly_chart(fig_vol, use_container_width=True)
 
@@ -120,6 +125,7 @@ with tabs[0]:
             title="Top 5 Categorías mencionadas por período"
         )
         st.plotly_chart(fig_cat, use_container_width=True)
+
 
 
 
@@ -353,18 +359,9 @@ with tabs[3]:
 # 5. Canales de Atención
 with tabs[4]:
     st.subheader("Canales de Atención")
-    st.markdown("""
-    📡 **Descripción:**  
-    Se analiza la interacción de los clientes con los diferentes **Canales de Atención** 
-    (Teléfono, Web, App, WhatsApp, Oficinas Comerciales, etc.), permitiendo evaluar cuáles funcionan mejor.  
 
-    Además, se incluyen filtros para explorar la efectividad de la atención 
-    y los motivos por los que los problemas no fueron resueltos.
-    """)
     required_cols = [
-        "dni", "centro_atencion", "canal_atencion", "telefonico",
-        "web", "app", "whatsapp", "ofi_comercial",
-        "resuelto", "no_por_que"
+        "dni", "verbatim", "centro_atencion", "canal_atencion", "resuelto", "no_por_que", "grupo_nps", "categoria"
     ]
     missing_cols = [col for col in required_cols if col not in df.columns]
     if missing_cols:
@@ -376,24 +373,44 @@ with tabs[4]:
         st.write(f"### Registros con Centro de Atención: {registros_centro_atencion}")
 
         st.write("### Filtrar Canales de Atención")
-        col1, col2, col3, col4, col5 = st.columns(5)
-        col6, col7, col8, col9 = st.columns(4)
+        col1, col2, col3 = st.columns(3)
+        col4, col5 = st.columns(2)
+
+        canales_validos = [
+            "App Personal Flow",
+            "App Personal Flow (Sección Mi WiFI)",
+            "Chat por whatsapp",
+            "Personalmente",
+            "Redes sociales",
+            "Telefónico",
+            "Web Personal"
+        ]
+
         filters = {}
-        filters["centro_atencion"] = col1.selectbox("Centro Atención", ["Todos"] + list(df["centro_atencion"].dropna().unique()))
-        filters["canal_atencion"] = col2.selectbox("Canal", ["Todos"] + list(df["canal_atencion"].dropna().unique()))
-        filters["telefonico"] = col3.selectbox("Teléfono", ["Todos"] + list(df["telefonico"].dropna().unique()))
-        filters["web"] = col4.selectbox("Web", ["Todos"] + list(df["web"].dropna().unique()))
-        filters["app"] = col5.selectbox("App", ["Todos"] + list(df["app"].dropna().unique()))
-        filters["whatsapp"] = col6.selectbox("WhatsApp", ["Todos"] + list(df["whatsapp"].dropna().unique()))
-        filters["ofi_comercial"] = col7.selectbox("Oficina", ["Todos"] + list(df["ofi_comercial"].dropna().unique()))
-        filters["resuelto"] = col8.selectbox("Resuelto", ["Todos"] + list(df["resuelto"].dropna().unique()))
-        filters["no_por_que"] = col9.selectbox("No - Por qué", ["Todos"] + list(df["no_por_que"].dropna().unique()))
+        filters["centro_atencion"] = col1.selectbox("Centro Atención", ["Todos"] + sorted(df["centro_atencion"].dropna().unique()))
+        filters["canal_atencion"] = col2.selectbox("Canal", ["Todos"] + canales_validos)
+        filters["resuelto"] = col3.selectbox("Resuelto", ["Todos"] + sorted(df["resuelto"].dropna().astype(str).unique().tolist() + ["None"]))
+        filters["grupo_nps"] = col4.selectbox("Grupo NPS", ["Todos"] + sorted(df["grupo_nps"].dropna().unique()))
+        filters["categoria"] = col5.selectbox("Categoría", ["Todos"] + sorted(df["categoria"].dropna().unique()))
+
+        df = df[df["canal_atencion"].isin(canales_validos)]
         df_filtered = df.copy()
         for col, value in filters.items():
             if value != "Todos":
-                df_filtered = df_filtered[df_filtered[col] == value]
+                if col == "resuelto" and value == "None":
+                    df_filtered = df_filtered[df_filtered[col].isna()]
+                else:
+                    df_filtered = df_filtered[df_filtered[col] == value]
+
         st.write("### Tabla de Canales de Atención con Filtros")
         st.dataframe(df_filtered[required_cols], height=500, use_container_width=True)
+
+
+
+
+
+
+
 
 # 6. Tabla Completa del CSV
 with tabs[5]:  # Nueva pestaña en la posición 6
